@@ -87,6 +87,12 @@ impl<T> From<usize> for Limit<T> {
     }
 }
 
+impl<T, F: FnMut(&T) -> bool + 'static> From<F> for Limit<T> {
+    fn from(f: F) -> Self {
+        Limit::Until(Box::new(f) as _)
+    }
+}
+
 /// The number bits in a field
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub struct BitSize(pub usize);
