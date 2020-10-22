@@ -72,33 +72,18 @@ impl FromStr for Endian {
     }
 }
 
-/// The count of a container's elements
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Count(pub usize);
+/// The limiting factor when reading a container
+pub enum Limit<T> {
+    /// The number of elements to read
+    Count(usize),
 
-impl Into<usize> for Count {
-    fn into(self) -> usize {
-        self.0
-    }
+    /// Read until a given predicate returns true
+    Until(Box<dyn FnMut(&T) -> bool>),
 }
 
-impl From<usize> for Count {
+impl<T> From<usize> for Limit<T> {
     fn from(n: usize) -> Self {
-        Self(n)
-    }
-}
-
-impl Deref for Count {
-    type Target = usize;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Count {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+        Limit::Count(n)
     }
 }
 

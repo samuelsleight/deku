@@ -215,7 +215,7 @@ use alloc::{format, vec::Vec};
 #[cfg(feature = "std")]
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
-use crate::ctx::{BitSize, Count, Endian};
+use crate::ctx::{BitSize, Limit, Endian};
 use bitvec::prelude::*;
 use core::convert::TryInto;
 pub use deku_derive::*;
@@ -498,7 +498,7 @@ macro_rules! ImplDekuTraits {
     };
 }
 
-impl<T: DekuRead<Ctx>, Ctx: Copy> DekuRead<(Count, Ctx)> for Vec<T> {
+impl<T: DekuRead<Ctx>, Ctx: Copy> DekuRead<(Limit<T>, Ctx)> for Vec<T> {
     /// Read the specified number of `T`s from input.
     /// * `count` - the number of `T`s you want to read.
     /// * `inner_ctx` - The context required by `T`. It will be passed to every `T`s when constructing.
@@ -514,30 +514,49 @@ impl<T: DekuRead<Ctx>, Ctx: Copy> DekuRead<(Count, Ctx)> for Vec<T> {
     /// ```
     fn read(
         input: &BitSlice<Msb0, u8>,
-        (count, inner_ctx): (Count, Ctx),
+        (limit, inner_ctx): (Limit<T>, Ctx),
     ) -> Result<(&BitSlice<Msb0, u8>, Self), DekuError>
     where
         Self: Sized,
     {
-        let count: usize = count.into();
+        // Get the vector to fill (which may be pre-allocated) and our predicate
+        let (mut res, mut predicate): (_, Box<dyn FnMut(&T) -> bool + 'static>) = match limit {
+            Limit::Count(mut count) => {
+                // Check first for the trivial case of `count == 0`
+                // Otherwise, this breaks the predicate
+                if count == 0 {
+                    return Ok((input, Vec::new()));
+                }
 
-        let mut res = Vec::with_capacity(count);
+                // Construct a predicate to read `count` elements
+                (Vec::with_capacity(count), Box::new(move |_| { count -= 1; count == 0 }))
+            },
+
+            Limit::Until(predicate) => (Vec::new(), predicate),
+        };
+
         let mut rest = input;
-        for _i in 0..count {
+
+        // Read items in a loop until the predicate returns true
+        loop {
             let (new_rest, val) = <T>::read(rest, inner_ctx)?;
             res.push(val);
             rest = new_rest;
+
+            if predicate(res.last().unwrap()) {
+                break
+            }
         }
 
         Ok((rest, res))
     }
 }
 
-impl<T: DekuRead> DekuRead<Count> for Vec<T> {
+impl<T: DekuRead> DekuRead<Limit<T>> for Vec<T> {
     /// Read the specified number of `T`s from input for types which don't require context.
     fn read(
         input: &BitSlice<Msb0, u8>,
-        count: Count,
+        count: Limit<T>,
     ) -> Result<(&BitSlice<Msb0, u8>, Self), DekuError>
     where
         Self: Sized,
@@ -881,9 +900,9 @@ mod tests {
 
         let (rest, res_read) = match bit_size {
             Some(bit_size) => {
-                Vec::<u8>::read(bit_slice, (Count(count), (endian, BitSize(bit_size)))).unwrap()
+                Vec::<u8>::read(bit_slice, (Limit::Count(count), (endian, BitSize(bit_size)))).unwrap()
             }
-            None => Vec::<u8>::read(bit_slice, (Count(count), (endian))).unwrap(),
+            None => Vec::<u8>::read(bit_slice, (Limit::Count(count), (endian))).unwrap(),
         };
 
         assert_eq!(expected, res_read);
@@ -918,7 +937,7 @@ mod tests {
         let bit_size = bit_size.unwrap();
 
         let (rest, res_read) =
-            Vec::<u16>::read(bit_slice, (Count(count), (endian, BitSize(bit_size)))).unwrap();
+            Vec::<u16>::read(bit_slice, (Limit::Count(count), (endian, BitSize(bit_size)))).unwrap();
         assert_eq!(expected, res_read);
         assert_eq!(expected_rest, rest);
 
