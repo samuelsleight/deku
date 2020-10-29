@@ -2,10 +2,10 @@ use deku::prelude::*;
 use std::convert::{TryFrom, TryInto};
 
 #[test]
-fn test_bits_read_static() {
+fn test_bits_static() {
     #[derive(PartialEq, Debug, DekuRead, DekuWrite)]
     struct TestStruct {
-        #[deku(endian = "little", bits_read = "16")]
+        #[deku(endian = "little", bits = "16")]
         data: Vec<u16>,
     }
 
@@ -29,12 +29,12 @@ fn test_bits_read_static() {
 }
 
 #[test]
-fn test_bits_read_from_field() {
+fn test_bits_from_field() {
     #[derive(PartialEq, Debug, DekuRead, DekuWrite)]
     struct TestStruct {
         bits: u8,
 
-        #[deku(endian = "little", bits_read = "bits")]
+        #[deku(endian = "little", bits = "*bits")]
         data: Vec<u16>,
     }
 
@@ -63,12 +63,12 @@ fn test_bits_read_from_field() {
 
 #[test]
 #[should_panic(expected = "Parse(\"not enough data: expected 16 bits got 0 bits\")")]
-fn test_bits_read_error() {
+fn test_bits_error() {
     #[derive(PartialEq, Debug, DekuRead, DekuWrite)]
     struct TestStruct {
         bits: u8,
 
-        #[deku(endian = "little", bits_read = "bits")]
+        #[deku(endian = "little", bits = "*bits")]
         data: Vec<u16>,
     }
 

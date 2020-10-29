@@ -40,7 +40,7 @@ struct DekuData {
 
     /// enum only: bit size of the enum `id`
     /// `bytes` is converted to `bits` if provided
-    bits: Option<usize>,
+    bits: Option<TokenStream>,
 }
 
 impl DekuData {
@@ -80,7 +80,25 @@ impl DekuData {
             .transpose()
             .map_err(|e| e.to_compile_error())?;
 
-        let bits = receiver.bytes.map(|b| b * 8).or(receiver.bits);
+        let bits = receiver
+            .bytes
+            .map(|tokens| {
+                quote! {
+                    {
+                        use core::convert::TryFrom;
+                        usize::try_from(#tokens)?.checked_mul(8).unwrap()
+                    }
+                }
+            })
+            .or(receiver.bits)
+            .map(|tokens| {
+                quote! {
+                    {
+                        use core::convert::TryFrom;
+                        usize::try_from(#tokens)?
+                    }
+                }
+            });
 
         Ok(Self {
             vis: receiver.vis,
@@ -199,14 +217,11 @@ struct FieldData {
     /// endianness for the field
     endian: Option<syn::LitStr>,
 
-    /// field bit size
-    bits: Option<usize>,
+    /// tokens providing the number of bits for the length of the container
+    bits: Option<TokenStream>,
 
     /// tokens providing the length of the container
     count: Option<TokenStream>,
-
-    /// tokens providing the number of bits for the length of the container
-    bits_read: Option<TokenStream>,
 
     /// a predicate to decide when to stop reading elements into the container
     until: Option<TokenStream>,
@@ -241,12 +256,25 @@ impl FieldData {
         FieldData::validate(&receiver)
             .map_err(|(span, msg)| syn::Error::new(span, msg).to_compile_error())?;
 
-        let bits = receiver.bytes.map(|b| b * 8).or(receiver.bits);
-
-        let bits_read = receiver
-            .bytes_read
-            .map(|tokens| quote! { (#tokens) * 8 })
-            .or(receiver.bits_read);
+        let bits = receiver
+            .bytes
+            .map(|tokens| {
+                quote! {
+                    {
+                        use core::convert::TryFrom;
+                        usize::try_from(#tokens)?.checked_mul(8).unwrap()
+                    }
+                }
+            })
+            .or(receiver.bits)
+            .map(|tokens| {
+                quote! {
+                    {
+                        use core::convert::TryFrom;
+                        usize::try_from(#tokens)?
+                    }
+                }
+            });
 
         let default = receiver.default.unwrap_or(quote! { Default::default() });
 
@@ -262,7 +290,6 @@ impl FieldData {
             endian: receiver.endian,
             bits,
             count: receiver.count,
-            bits_read,
             until: receiver.until,
             map: receiver.map,
             ctx,
@@ -415,13 +442,15 @@ struct DekuReceiver {
     #[darling(rename = "type", default)]
     id_type: Option<syn::Ident>,
 
-    /// enum only: bit size of the enum `id`
-    #[darling(default)]
-    bits: Option<usize>,
+    /// enum only: tokens providing the number of bits
+    /// for the length of the enum `id`
+    #[darling(default, map = "option_as_tokenstream")]
+    bits: Option<TokenStream>,
 
-    /// enum only: byte size of the enum `id`
-    #[darling(default)]
-    bytes: Option<usize>,
+    /// enum only: tokens providing the number of bytes
+    /// for the length of the enum `id`
+    #[darling(default, map = "option_as_tokenstream")]
+    bytes: Option<TokenStream>,
 }
 
 /// Parse a TokenStream from an Option<LitStr>
@@ -461,25 +490,17 @@ struct DekuFieldReceiver {
     #[darling(default)]
     endian: Option<syn::LitStr>,
 
-    /// field bit size
-    #[darling(default)]
-    bits: Option<usize>,
+    /// tokens providing the number of bits for the length of the container
+    #[darling(default, map = "option_as_tokenstream")]
+    bits: Option<TokenStream>,
 
-    /// field byte size
-    #[darling(default)]
-    bytes: Option<usize>,
+    /// tokens providing the number of bytes for the length of the container
+    #[darling(default, map = "option_as_tokenstream")]
+    bytes: Option<TokenStream>,
 
     /// tokens providing the length of the container
     #[darling(default, map = "option_as_tokenstream")]
     count: Option<TokenStream>,
-
-    /// tokens providing the number of bits for the length of the container
-    #[darling(default, map = "option_as_tokenstream")]
-    bits_read: Option<TokenStream>,
-
-    /// tokens providing the number of bytes for the length of the container
-    #[darling(default, map = "option_as_tokenstream")]
-    bytes_read: Option<TokenStream>,
 
     /// a predicate to decide when to stop reading elements into the container
     #[darling(default, map = "option_as_tokenstream")]
@@ -597,12 +618,12 @@ mod tests {
         // Valid struct
         case::struct_empty(r#"struct Test {}"#),
         case::struct_unnamed(r#"struct Test(u8, u8);"#),
-        case::struct_unnamed_attrs(r#"struct Test(#[deku(bits=4)] u8, u8);"#),
+        case::struct_unnamed_attrs(r#"struct Test(#[deku(bits="4")] u8, u8);"#),
         case::struct_all_attrs(r#"
         struct Test {
-            #[deku(bits = 4)]
+            #[deku(bits = "4")]
             field_a: u8,
-            #[deku(bytes = 4)]
+            #[deku(bytes = "4")]
             field_b: u64,
             #[deku(endian = little)]
             field_c: u32,
@@ -620,14 +641,14 @@ mod tests {
             #[deku(id = "1")]
             A,
             #[deku(id = "2")]
-            B(#[deku(bits = 4)] u8),
+            B(#[deku(bits = "4")] u8),
             #[deku(id = "3")]
             C { field_n: u8 },
         }"#),
 
         // TODO: these tests should error/warn eventually?
         // error: trying to store 9 bits in 8 bit type
-        case::invalid_storage(r#"struct Test(#[deku(bits=9)] u8);"#),
+        case::invalid_storage(r#"struct Test(#[deku(bits="9")] u8);"#),
         // warn: trying to set endian on a type which wouldn't make a difference
         case::invalid_endian(r#"struct Test(#[endian=big] u8);"#),
     )]

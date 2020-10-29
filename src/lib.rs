@@ -534,6 +534,34 @@ fn read_vec_with_predicate<T: DekuRead<Ctx>, Ctx: Copy, Predicate: FnMut(usize, 
     Ok((rest, res))
 }
 
+impl<T: DekuRead> DekuRead<BitSize> for Vec<T> {
+    fn read(
+        input: &BitSlice<Msb0, u8>,
+        bit_size: BitSize,
+    ) -> Result<(&BitSlice<Msb0, u8>, Self), DekuError>
+    where
+        Self: Sized,
+    {
+        read_vec_with_predicate(input, None, (), move |read_bits, _| {
+            read_bits == bit_size.into()
+        })
+    }
+}
+
+impl<T: DekuRead<Endian>> DekuRead<(Endian, BitSize)> for Vec<T> {
+    fn read(
+        input: &BitSlice<Msb0, u8>,
+        (endian, bit_size): (Endian, BitSize),
+    ) -> Result<(&BitSlice<Msb0, u8>, Self), DekuError>
+    where
+        Self: Sized,
+    {
+        read_vec_with_predicate(input, None, endian, move |read_bits, _| {
+            read_bits == bit_size.into()
+        })
+    }
+}
+
 impl<T: DekuRead<Ctx>, Ctx: Copy, Predicate: FnMut(&T) -> bool> DekuRead<(Limit<T, Predicate>, Ctx)>
     for Vec<T>
 {

@@ -3,7 +3,7 @@ use deku::prelude::*;
 #[test]
 fn test_from_bytes_struct() {
     #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-    struct TestDeku(#[deku(bits = 4)] u8);
+    struct TestDeku(#[deku(bits = "4")] u8);
 
     let test_data: Vec<u8> = [0b0110_0110u8, 0b0101_1010u8].to_vec();
 

@@ -10,8 +10,6 @@ A documentation-only module for #\[deku\] attributes
 | [bits](#bits) | field | Set the bit-size of the field
 | [bytes](#bytes) | field | Set the byte-size of the field
 | [count](#count) | field | Set the field representing the element count of a container
-| [bits_read](#bits_read) | field | Set the field representing the number of bits to read into a container
-| [bytes_read](#bytes_read) | field | Set the field representing the number of bytes to read into a container
 | [until](#until) | field | Set a predicate returning when to stop reading elements into a container
 | [update](#update) | field | Apply code over the field when `.update()` is called
 | [skip](#skip) | field | Skip the reading/writing of a field
@@ -146,9 +144,9 @@ Example:
 # use std::convert::{TryInto, TryFrom};
 # #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
 struct DekuTest {
-    #[deku(bits = 2)]
+    #[deku(bits = "2")]
     field_a: u8,
-    #[deku(bits = 6)]
+    #[deku(bits = "6")]
     field_b: u8,
     field_c: u8, // defaults to size_of<u8>*8
 }
@@ -182,7 +180,7 @@ Example:
 # use std::convert::{TryInto, TryFrom};
 # #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
 struct DekuTest {
-    #[deku(bytes = 2)]
+    #[deku(bytes = "2")]
     field_a: u32,
     field_b: u8, // defaults to size_of<u8>
 }
@@ -236,58 +234,6 @@ assert_eq!(data, value);
 ```
 
 **Note**: See [update](#update) for more information on the attribute!
-
-
-# bytes_read
-
-Specify the field representing the total number of bytes to read into a container
-
-See the following example, where `InnerDekuTest` is 2 bytes, so setting `bytes_read` to
-4 will read 2 items into the container:
-```rust
-# use deku::prelude::*;
-# use std::convert::{TryInto, TryFrom};
-# #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-struct InnerDekuTest {
-    field_a: u8,
-    field_b: u8
-}
-
-# #[derive(Debug, PartialEq, DekuRead, DekuWrite)]
-struct DekuTest {
-    #[deku(update = "(self.items.len() / 2)")]
-    bytes: u8,
-
-    #[deku(bytes_read = "bytes")]
-    items: Vec<InnerDekuTest>,
-}
-
-let data: Vec<u8> = vec![0x04, 0xAB, 0xBC, 0xDE, 0xEF];
-
-let value = DekuTest::try_from(data.as_ref()).unwrap();
-
-assert_eq!(
-    DekuTest {
-       bytes: 0x04,
-       items: vec![
-           InnerDekuTest{field_a: 0xAB, field_b: 0xBC},
-           InnerDekuTest{field_a: 0xDE, field_b: 0xEF}],
-    },
-    value
-);
-
-let value: Vec<u8> = value.try_into().unwrap();
-assert_eq!(data, value);
-```
-
-**Note**: See [update](#update) for more information on the attribute!
-
-
-# bits_read
-
-This is equivalent to [bytes_read](#bytes_read), however specifies the bit limit instead
-of a byte limit
-
 
 # until
 

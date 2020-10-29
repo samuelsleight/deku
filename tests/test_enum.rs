@@ -12,7 +12,7 @@ pub enum TestEnum {
     #[deku(id = "1")]
     VarA(u8),
     #[deku(id = "2")]
-    VarB(#[deku(bits = 4)] u8, #[deku(bits = 4)] u8),
+    VarB(#[deku(bits = "4")] u8, #[deku(bits = "4")] u8),
     #[deku(id = "3")]
     VarC {
         #[deku(update = "field_b.len()")]
